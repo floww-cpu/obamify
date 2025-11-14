@@ -132,6 +132,15 @@ requirements.txt           # Runtime dependencies
 wsgi.py                    # Application entry-point
 ```
 
+## Development
+
+Install the development dependencies and run the unit test suite with:
+
+```bash
+pip install -r requirements-dev.txt
+pytest
+```
+
 ## Contributing
 
 Issues and pull requests are welcome. Please ensure new contributions include
