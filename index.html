@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Obamify Image Transformation API</title>
+    <link rel="stylesheet" href="styles.css" />
+    <link rel="manifest" href="manifest.json" />
+    <link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-32x32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="assets/favicon-16x16.png" />
+</head>
+<body>
+    <header>
+        <div class="brand">
+            <img src="assets/favicon-32x32.png" alt="Obamify logo" />
+            <h1>Obamify Image Transformation API</h1>
+        </div>
+        <p>
+            A Flask-based HTTP service that blends user supplied images with the
+            classic Barack Obama portrait. The project is now fully implemented in Python.
+        </p>
+    </header>
+
+    <main>
+        <section>
+            <h2>Quick start</h2>
+            <ol>
+                <li>Run the application locally:<br /><code>python wsgi.py</code></li>
+                <li>
+                    Send a transformation request:<br />
+                    <code>curl -X POST http://localhost:8000/api/transform -H "Content-Type: application/json" -d '{"source_image": "&lt;base64 png&gt;"}'</code>
+                </li>
+            </ol>
+            <p>
+                The API returns either a base64 encoded PNG or GIF payload, or the raw binary
+                bytes when <code>response_format</code> is set to <code>"binary"</code>.
+            </p>
+        </section>
+
+        <section>
+            <h2>Endpoints</h2>
+            <div class="endpoint">
+                <h3>GET <span>/health</span></h3>
+                <p>Health probe returning <code>{"status": "ok"}</code>.</p>
+            </div>
+            <div class="endpoint">
+                <h3>POST <span>/api/transform</span></h3>
+                <p>Perform the image transformation.</p>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Field</th>
+                            <th>Type</th>
+                            <th>Description</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td data-label="Field">source_image</td>
+                            <td data-label="Type">base64 PNG/JPEG</td>
+                            <td data-label="Description"><strong>Required.</strong> The source image to transform.</td>
+                        </tr>
+                        <tr>
+                            <td data-label="Field">target_image</td>
+                            <td data-label="Type">base64 PNG/JPEG</td>
+                            <td data-label="Description">Optional custom target portrait. Defaults to <code>assets/pfp_transparent.png</code>.</td>
+                        </tr>
+                        <tr>
+                            <td data-label="Field">blend_ratio</td>
+                            <td data-label="Type">float (0-1)</td>
+                            <td data-label="Description">Intensity of the target portrait. Defaults to 0.65.</td>
+                        </tr>
+                        <tr>
+                            <td data-label="Field">max_dimension</td>
+                            <td data-label="Type">int</td>
+                            <td data-label="Description">Maximum width/height in pixels. Defaults to 1024.</td>
+                        </tr>
+                        <tr>
+                            <td data-label="Field">make_gif</td>
+                            <td data-label="Type">bool</td>
+                            <td data-label="Description">Create an animated GIF instead of a PNG.</td>
+                        </tr>
+                        <tr>
+                            <td data-label="Field">gif_frame_count</td>
+                            <td data-label="Type">int</td>
+                            <td data-label="Description">Frames when generating a GIF. Defaults to 12.</td>
+                        </tr>
+                        <tr>
+                            <td data-label="Field">gif_duration</td>
+                            <td data-label="Type">int</td>
+                            <td data-label="Description">Frame duration in milliseconds (default 80ms).</td>
+                        </tr>
+                        <tr>
+                            <td data-label="Field">response_format</td>
+                            <td data-label="Type">"json" | "binary"</td>
+                            <td data-label="Description">How the result should be returned. Defaults to JSON.</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <section>
+            <h2>Python usage</h2>
+            <pre><code>from app import create_app
+from app.services.transformation_service import TransformationRequest, transform
+from PIL import Image
+
+app = create_app()
+with app.app_context():
+    source = Image.open("my_face.png")
+    target = Image.open("assets/pfp_transparent.png")
+    result = transform(
+        TransformationRequest(
+            source=source,
+            target=target,
+            blend_ratio=0.6,
+            make_gif=False,
+            gif_frame_count=12,
+            gif_duration=80,
+            max_dimension=1024,
+        )
+    )
+    with open("output.png", "wb") as fh:
+        fh.write(result.data)
+</code></pre>
+        </section>
+    </main>
+
+    <footer>
+        <p>
+            Released under the MIT License. View the source on GitHub.
+        </p>
+    </footer>
+
+    <script>
+        if ("serviceWorker" in navigator) {
+            window.addEventListener("load", () => {
+                navigator.serviceWorker
+                    .register("sw.js")
+                    .catch((error) => console.warn("Failed to register service worker", error))
+            })
+        }
+    </script>
+</body>
+</html>
