@@ -3,7 +3,7 @@ from __future__ import annotations
 from http import HTTPStatus
 from typing import Any, Dict, Tuple
 
-from flask import Blueprint, Flask, current_app, jsonify, request
+from flask import Blueprint, Flask, current_app, jsonify, request, send_file
 
 from .services.transformation_service import (
     TransformationError,
@@ -12,9 +12,10 @@ from .services.transformation_service import (
     load_default_target,
 )
 from .utils.image_io import ImageDecodingError, decode_base64_image, load_image_from_file
+from .utils.temp_file_manager import TempFileManager
 
 api_bp = Blueprint("api", __name__)
-_VALID_RESPONSE_FORMATS = {"json", "binary"}
+_VALID_RESPONSE_FORMATS = {"json", "binary", "url"}
 
 
 class RequestValidationError(ValueError):
@@ -28,6 +29,40 @@ class RequestValidationError(ValueError):
 @api_bp.route("/health", methods=["GET"])
 def health() -> Tuple[Any, int]:
     return jsonify({"status": "ok"}), HTTPStatus.OK
+
+
+@api_bp.route("/api/temp/<filename>", methods=["GET"])
+def serve_temp_image(filename: str) -> Any:
+    """Serve a temporary image file."""
+    # Check if file has expired
+    if TempFileManager.is_file_expired(filename):
+        return jsonify({"error": "Image has expired or does not exist"}), HTTPStatus.NOT_FOUND
+    
+    # Get the file path
+    filepath = TempFileManager.get_temp_image_path(filename)
+    if not filepath:
+        return jsonify({"error": "Image not found"}), HTTPStatus.NOT_FOUND
+    
+    # Determine MIME type from file extension
+    if filename.endswith('.gif'):
+        mimetype = 'image/gif'
+    else:
+        mimetype = 'image/png'
+    
+    try:
+        return send_file(filepath, mimetype=mimetype)
+    except Exception:
+        return jsonify({"error": "Failed to serve image"}), HTTPStatus.INTERNAL_SERVER_ERROR
+
+
+@api_bp.route("/api/temp/cleanup", methods=["POST"])
+def cleanup_temp_files() -> Tuple[Any, int]:
+    """Manually trigger cleanup of expired temporary files."""
+    deleted_count = TempFileManager.cleanup_expired_files()
+    return jsonify({
+        "message": f"Cleaned up {deleted_count} expired temporary files.",
+        "deleted_count": deleted_count
+    }), HTTPStatus.OK
 
 
 @api_bp.route("/api/transform", methods=["POST"])
@@ -52,6 +87,28 @@ def transform_endpoint() -> Any:
         response.headers["Content-Disposition"] = f"inline; filename={filename}"
         response.status_code = HTTPStatus.OK
         return response
+
+    if response_format == "url":
+        # Save the image temporarily and return the URL
+        temp_filename = TempFileManager.save_temp_image(result.data, result.mime_type)
+        temp_url = TempFileManager.get_temp_image_url(temp_filename)
+        
+        # Cleanup expired files (optional, can be done periodically)
+        TempFileManager.cleanup_expired_files()
+        
+        return (
+            jsonify(
+                {
+                    "url": temp_url,
+                    "mime_type": result.mime_type,
+                    "width": result.width,
+                    "height": result.height,
+                    "frame_count": result.frame_count,
+                    "expires_in_hours": current_app.config["TEMP_IMAGE_EXPIRY_HOURS"],
+                }
+            ),
+            HTTPStatus.OK,
+        )
 
     return (
         jsonify(

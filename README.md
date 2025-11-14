@@ -10,8 +10,8 @@ frame or an animated GIF that loops smoothly through the transformation.
 - Accepts JSON payloads (base64-encoded images) or `multipart/form-data` uploads.
 - Optional secondary target image; falls back to `assets/pfp_transparent.png`.
 - Tunable blend strength, output size and GIF animation parameters.
-- Responses can be returned either as base64-encoded JSON payloads or as raw
-  binary image data.
+- Responses can be returned as base64-encoded JSON payloads, raw binary image data, or as temporary URLs.
+- Temporary image hosting with 48-hour expiry and automatic cleanup.
 
 ## Getting started
 
@@ -19,6 +19,14 @@ frame or an animated GIF that loops smoothly through the transformation.
 
 - Python 3.10+
 - pip
+
+### Environment Variables
+
+The following environment variables can be configured:
+
+- `TEMP_IMAGE_URL_BASE`: Base URL for temporary image links (default: `http://localhost:8000`)
+  - Set this to your public domain when deploying to production
+  - Example: `https://your-api-domain.com`
 
 ### Installation
 
@@ -39,12 +47,14 @@ env FLASK_APP=wsgi.py flask run --host=0.0.0.0 --port=8000
 python wsgi.py
 ```
 
-The service exposes two endpoints:
+The service exposes four endpoints:
 
-| Method | Path             | Description                        |
-|--------|------------------|------------------------------------|
-| GET    | `/health`        | Simple health check returning OK. |
-| POST   | `/api/transform` | Perform the image transformation. |
+| Method | Path                | Description                        |
+|--------|---------------------|------------------------------------|
+| GET    | `/health`           | Simple health check returning OK. |
+| POST   | `/api/transform`    | Perform the image transformation. |
+| GET    | `/api/temp/<filename>` | Serve a temporary image file. |
+| POST   | `/api/temp/cleanup` | Manually trigger cleanup of expired temporary files. |
 
 ## API reference
 
@@ -78,9 +88,10 @@ The endpoint accepts parameters via JSON or `multipart/form-data`.
 - `gif_frame_count` (optional, default `12`): number of frames when creating a
   GIF. Must be between 2 and 120.
 - `gif_duration` (optional, default `80`): frame duration in milliseconds.
-- `response_format` (optional, `json` or `binary`, default `json`): whether to
-  return a JSON response containing a base64 encoded image or a direct binary
-  response suitable for a browser download.
+- `response_format` (optional, `json`, `binary`, or `url`, default `json`): whether to
+  return a JSON response containing a base64 encoded image, a direct binary
+  response suitable for a browser download, or a temporary URL that hosts the
+  image for 48 hours.
 
 #### Multipart form example
 
@@ -107,6 +118,24 @@ provide a base64 encoded string in a regular text field.
 }
 ```
 
+#### Successful URL response
+
+When `response_format=url`, the API returns a temporary URL:
+
+```json
+{
+  "url": "http://localhost:8000/api/temp/abc123def456.1704067200.png",
+  "mime_type": "image/png",
+  "width": 512,
+  "height": 512,
+  "frame_count": 1,
+  "expires_in_hours": 48
+}
+```
+
+The temporary URL will be accessible for 48 hours after creation. Expired files
+are automatically cleaned up.
+
 If `response_format=binary` the API streams the generated file directly with the
 appropriate `Content-Type` header (`image/png` or `image/gif`).
 
@@ -115,6 +144,32 @@ appropriate `Content-Type` header (`image/png` or `image/gif`).
 Invalid inputs yield a 400 response with an `error` message describing the
 problem. Transformation errors (for example, corrupted images) return a 422
 status code.
+
+### `GET /api/temp/<filename>`
+
+Serve a temporary image file that was created with `response_format=url`.
+
+#### Parameters
+
+- `filename`: The filename returned in the URL response from the transform endpoint.
+
+#### Response
+
+Returns the image file with the appropriate `Content-Type` header (`image/png` or `image/gif`).
+If the file has expired or doesn't exist, returns a 404 response with an error message.
+
+### `POST /api/temp/cleanup`
+
+Manually trigger cleanup of expired temporary files.
+
+#### Response
+
+```json
+{
+  "message": "Cleaned up 5 expired temporary files.",
+  "deleted_count": 5
+}
+```
 
 ## Project layout
 
@@ -126,8 +181,10 @@ app/
     transformation_service.py  # Image blending & GIF generation logic
   utils/
     image_io.py            # Safe image decoding helpers
+    temp_file_manager.py   # Temporary file management & cleanup
 assets/
   pfp_transparent.png      # Default target portrait
+temp/                      # Temporary image storage (auto-created)
 requirements.txt           # Runtime dependencies
 wsgi.py                    # Application entry-point
 ```

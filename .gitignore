@@ -28,3 +28,6 @@ instance/
 
 # Misc
 coverage/
+
+# Temporary files
+temp/
