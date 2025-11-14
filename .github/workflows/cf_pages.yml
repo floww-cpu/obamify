@@ -13,21 +13,14 @@ jobs:
         runs-on: ubuntu-latest
         steps:
             - uses: actions/checkout@v4
-            - name: Setup toolchain for wasm
-              run: |
-                  rustup update stable
-                  rustup default stable
-                  rustup set profile minimal
-                  rustup target add wasm32-unknown-unknown
 
-            - name: Rust Cache
-              uses: Swatinem/rust-cache@v2
+            - name: Set up Python
+              uses: actions/setup-python@v5
+              with:
+                  python-version: "3.11"
 
-            - name: Download and install Trunk binary
-              run: wget -qO- https://github.com/thedodd/trunk/releases/latest/download/trunk-x86_64-unknown-linux-gnu.tar.gz | tar -xzf-
-
-            - name: Build
-              run: ./trunk build --release --public-url "/"
+            - name: Build static documentation site
+              run: python scripts/build_static_site.py
 
             - name: Deploy to Cloudflare Pages
               uses: cloudflare/wrangler-action@v3
