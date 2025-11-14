@@ -4,6 +4,7 @@ import os
 from pathlib import Path
 
 from flask import Flask
+from flask_cors import CORS
 
 from .routes import register_routes
 
@@ -12,6 +13,16 @@ def create_app() -> Flask:
     """Application factory."""
 
     app = Flask(__name__)
+
+    # Enable CORS for all routes
+    CORS(app, resources={
+        r"/api/*": {
+            "origins": "*",  # Allow all origins for development
+            "methods": ["GET", "POST", "OPTIONS"],
+            "allow_headers": ["Content-Type", "Authorization", "X-Requested-With"],
+            "supports_credentials": True
+        }
+    })
 
     project_root = Path(__file__).resolve().parent.parent
     temp_dir = project_root / "temp"
